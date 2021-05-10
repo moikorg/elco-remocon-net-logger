@@ -39,15 +39,17 @@ def parse_args() -> object:
     return parser.parse_args()
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code "+str(rc))
+    #print("Connected with result code "+str(rc))
+    pass
 
 
 def on_publish(client, userdata, result):
-    print("Data published")
+    #print("Data published")
     pass
 
 def on_disconnect(client, userdata, rc):
-    print("disconnecting reason  " + str(rc))
+    #print("disconnecting reason  " + str(rc))
+    pass
 
 
 def connectMQTT(conf):
@@ -67,7 +69,7 @@ def connectMQTT(conf):
 
 
 def writeHVACMQTT(conf, ep, waterTemp, outsideTemp, heatpump):
-    print("Write MQTT")
+    #print("Write MQTT")
     client = connectMQTT(conf)
     if client == -1:
         return -1
@@ -168,4 +170,4 @@ if __name__ == '__main__':
 
     main(conf_mqtt, conf_hvac)
     db.close()
-    print("finishing")
+    #print("finishing")

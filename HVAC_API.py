@@ -7,6 +7,7 @@ import configparser
 import paho.mqtt.client as mqtt
 from peewee import *
 from urllib.parse import quote
+import argparse
 
 
 db = MySQLDatabase(None)  # will be initialized later
@@ -29,6 +30,13 @@ class HVAC_Model(BaseModel):
     outside_temp = FloatField()
     water_temp = FloatField()
     heat_pump_state = CharField(max_length=5)
+
+
+def parse_args() -> object:
+    parser = argparse.ArgumentParser(description='Reads values from Elco Remocon-Net API and writes it to MQTT and DB')
+    parser.add_argument('-f', help='path and filename of the config file, default is ./config.rc',
+                        default='config.rc')
+    return parser.parse_args()
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
@@ -150,10 +158,11 @@ def main(conf_mqtt, conf_hvac ):
 
 
 if __name__ == '__main__':
+    args = parse_args()
     config = configparser.ConfigParser()
-    config.read('config.rc')
+    config.read(args.f)
     try:
-        (conf_mqtt, conf_db, conf_hvac, ) = read_config(config, 'config.rc')
+        (conf_mqtt, conf_db, conf_hvac, ) = read_config(config, args.f)
     except ValueError:
         exit(1)
     db.init(conf_db['db'], host=conf_db['host'], user=conf_db['username'], password=conf_db['password'],

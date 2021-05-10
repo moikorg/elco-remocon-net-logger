@@ -6,6 +6,7 @@ The data will be published via MQTT and logged in a MySQL/MariaDB. The configura
 must be added in a config file.
 
 ## config.rc
+```sh
 [MQTT]
 host = localhost
 username = ... 

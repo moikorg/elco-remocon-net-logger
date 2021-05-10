@@ -94,10 +94,6 @@ def config_section_map(conf, section):
     return dict1
 
 
-def parse_args() -> object:
-    parser = argparse.ArgumentParser(description=
-
-
 def read_config(conf, config_file):
     try:
         c_mqtt = config_section_map(conf, "MQTT")

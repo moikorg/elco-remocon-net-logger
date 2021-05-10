@@ -14,7 +14,7 @@ db = MySQLDatabase(None)  # will be initialized later
 
 ## DB models
 class BaseModel(Model):
-    """A base model that will use our Sqlite database."""
+    """A base model that will use the MariaDB"""
     class Meta:
         database = db
 

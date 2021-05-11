@@ -142,7 +142,7 @@ def main(conf_mqtt, conf_hvac ):
     water_temp = heatpump_data["dhwStorageTemp"]
     outside_temp = heatpump_data['outsideTemp']
     heatPump_str = 'off'
-    if heatpump_data['heatPumpOn'] == 'True':
+    if heatpump_data['heatPumpOn']:
         heatPump_str = 'on'
 
     now = datetime.datetime.now()

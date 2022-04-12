@@ -131,18 +131,21 @@ def main(conf_mqtt, conf_hvac ):
 
     # login,get session cookie and address for json data
     response = session.post(url=url, headers=headers, data=payload)
-    m = re.search(r"\'(/BsbPlantDashboard/GetPlantData/.*)\'", response.text)
-    url = base_url + m.group(0)[1:-1]
-
+    m = re.search(r"gatewayId: \'(.*)\'", response.text)
+    gatewayID = m.group(1)
+    url = f"{base_url}R2/PlantHomeBsb/GetData/{gatewayID}"
     # get json data
-    response = session.get(url=url)
-    heatpump_data = json.loads(response.text)
+    send_json = {"useCache": "true", "zone": "1", "filter": {"progIds": "null", "plant": "true", "zone": "true"}}
+
+    response = session.post(url=url, json=send_json)
+    result_json = json.loads(response.text)
 
     # extract the interesting data from the json
-    water_temp = heatpump_data["dhwStorageTemp"]
-    outside_temp = heatpump_data['outsideTemp']
+    heatpump_data = result_json['data']
+    water_temp = heatpump_data['plantData']['dhwStorageTemp']
+    outside_temp = heatpump_data['plantData']['outsideTemp']
     heatPump_str = 'off'
-    if heatpump_data['heatPumpOn']:
+    if heatpump_data['plantData']['heatPumpOn']:
         heatPump_str = 'on'
 
     now = datetime.datetime.now()

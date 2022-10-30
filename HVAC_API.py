@@ -8,10 +8,15 @@ import paho.mqtt.client as mqtt
 from peewee import *
 from urllib.parse import quote
 import argparse
+from time import strftime, gmtime, sleep
+import schedule
+import sys
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
+
 
 
 db = MySQLDatabase(None)  # will be initialized later
-#db = SqliteDatabase(':memory:')
 
 ## DB models
 class BaseModel(Model):
@@ -36,7 +41,9 @@ def parse_args() -> object:
     parser = argparse.ArgumentParser(description='Reads values from Elco Remocon-Net API and writes it to MQTT and DB')
     parser.add_argument('-f', help='path and filename of the config file, default is ./config.rc',
                         default='config.rc')
+    parser.add_argument('-d', help='write the data also to MariaDB/MySQL DB', action='store_true', dest='db_write')
     return parser.parse_args()
+
 
 def on_connect(client, userdata, flags, rc):
     #print("Connected with result code "+str(rc))
@@ -114,23 +121,44 @@ def read_config(conf, config_file):
     try:
         c_alert_sensor = config_section_map(conf, "REMOCON-NET")
     except:
-        print("Could not find the ALERT_SENSOR conf section")
+        print("Could not find the REMOCON-NET conf section")
         config_full_path = os.getcwd() + "/" + config_file
         print("Tried to open the conf file: ", config_full_path)
         raise ValueError
-    return (c_mqtt, c_db, c_alert_sensor)
+    try:
+        c_influxdb = config_section_map(conf, "InfluxDB")
+    except:
+        print("Could not find the InfluxDB conf section")
+        config_full_path = os.getcwd() + "/" + config_file
+        print("Tried to open the conf file: ", config_full_path)
+        raise ValueError
+    return (c_mqtt, c_db, c_alert_sensor, c_influxdb)
+
+
+def write2InfluxDB(conf, water_tmp, outside_tmp, heating_state):
+    with InfluxDBClient(conf['url'], token=conf['token'], org=conf['org']) as client:
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+
+        ts = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        p = Point("heatpump")\
+            .tag("location", conf['location'])\
+            .time(ts)\
+            .field("temp_outside", outside_tmp)\
+            .field("temp_water", water_tmp)\
+            .field("heatpump_state", heating_state)
+        write_api.write(bucket=conf['bucket'], org=conf['org'], record=p)
 
 
 
-def main(conf_mqtt, conf_hvac ):
+def job(conf_mqtt, conf_hvac, conf_influxdb, write_db):
     base_url = conf_hvac['url']
-    url = base_url + "Account/Login?returnUrl=HTTP/2"
+    url = base_url + "R2/Account/Login?returnUrl=%2FR2%2FHome"
     payload = "Email="+quote(conf_hvac['username'], safe='')+"&Password="+quote(conf_hvac['password'], safe='')+"&RememberMe=false"
     headers = {'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': 'browserUtcOffset=-120'}
     session = requests.session()
 
     # login,get session cookie and address for json data
-    response = session.post(url=url, headers=headers, data=payload)
+    response = session.post(url=url, headers=headers, data=payload, allow_redirects=True)
     m = re.search(r"gatewayId: \'(.*)\'", response.text)
     gatewayID = m.group(1)
     url = f"{base_url}R2/PlantHomeBsb/GetData/{gatewayID}"
@@ -153,8 +181,37 @@ def main(conf_mqtt, conf_hvac ):
     print("TS: "+ep+", WaterTemp: "+str(water_temp)+", OutsideTemp: "+str(outside_temp)+", HeatPumpState: "+heatPump_str)
 
     writeHVACMQTT(conf=conf_mqtt, ep=ep, waterTemp=water_temp, outsideTemp=outside_temp, heatpump=heatPump_str)
-    HVAC_Model.insert(ts=ep,ts_epoch=now, outside_temp=outside_temp, water_temp=water_temp, heat_pump_state=heatPump_str).execute()
+    write2InfluxDB(conf_influxdb, water_temp, outside_temp, heatPump_str)
+    if write_db:
+        HVAC_Model.insert(ts=ep,ts_epoch=now, outside_temp=outside_temp, water_temp=water_temp, heat_pump_state=heatPump_str).execute()
 
+
+def main(config, db_write):
+    try:
+        (conf_mqtt, conf_db, conf_hvac, conf_influxdb) = read_config(config, args.f)
+    except ValueError:
+        exit(1)
+    if db_write:
+        db.init(conf_db['db'], host=conf_db['host'], user=conf_db['username'], password=conf_db['password'],
+                port=int(conf_db['port']))
+        try:
+            db.connect(conf_db)
+        except:
+            print("Could not connect to DB, exiting")
+            exit(-1)
+
+    try:
+        periodicity = int(conf_hvac['periodicity'])
+    except:
+        sys.exit("Periodicity value must be int")
+
+    schedule.every(periodicity).seconds.do(job, conf_mqtt=conf_mqtt, conf_hvac=conf_hvac, conf_influxdb=conf_influxdb, write_db=db_write)
+    while True:
+        schedule.run_pending()
+        sleep(5)
+
+    if db_write:
+        db.close() 
 
 
 
@@ -162,15 +219,5 @@ if __name__ == '__main__':
     args = parse_args()
     config = configparser.ConfigParser()
     config.read(args.f)
-    try:
-        (conf_mqtt, conf_db, conf_hvac, ) = read_config(config, args.f)
-    except ValueError:
-        exit(1)
-    db.init(conf_db['db'], host=conf_db['host'], user=conf_db['username'], password=conf_db['password'],
-            port=int(conf_db['port']))
-    db.connect(conf_db)
-    #db.create_tables([HVAC_Model])
 
-    main(conf_mqtt, conf_hvac)
-    db.close()
-    #print("finishing")
+    main(config, args.db_write)

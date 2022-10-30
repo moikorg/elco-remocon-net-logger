@@ -2,3 +2,5 @@ peewee
 requests
 pymysql
 paho-mqtt
+influxdb_client
+schedule

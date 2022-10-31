@@ -1,0 +1,13 @@
+version: "2"
+
+services:
+  sensor_hvac:
+    build: .
+    volumes:
+      - ./code:/code
+    tty: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+

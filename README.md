@@ -2,7 +2,7 @@
 
 This Python script gets the data from the heatpump system via the Elco Remocon-Net cloud service.
 
-The data will be published via MQTT and logged in a MySQL/MariaDB. The configuration information
+The data will be published via MQTT and logged in a InfluxDB/MySQL/MariaDB. The configuration information
 must be added in a config file.
 
 ## config.rc

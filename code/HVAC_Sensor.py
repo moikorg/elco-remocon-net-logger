@@ -139,6 +139,7 @@ def write2InfluxDB(conf, water_tmp, outside_tmp, heating_state):
     with InfluxDBClient(conf['url'], token=conf['token'], org=conf['org']) as client:
         write_api = client.write_api(write_options=SYNCHRONOUS)
 
+        #heating_state_bool = True if heating_state == 'on' else False
         ts = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         p = Point("heatpump")\
             .tag("location", conf['location'])\

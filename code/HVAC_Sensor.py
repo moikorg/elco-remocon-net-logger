@@ -141,7 +141,7 @@ def write2InfluxDB(conf, water_tmp, outside_tmp, heating_state):
 
         #heating_state_bool = True if heating_state == 'on' else False
         ts = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        p = Point("heatpump")\
+        p = Point(conf['measurement'])\
             .tag("location", conf['location'])\
             .time(ts)\
             .field("temp_outside", outside_tmp)\
@@ -161,22 +161,32 @@ def job(conf_mqtt, conf_hvac, conf_influxdb, write_db):
     # login,get session cookie and address for json data
     response = session.post(url=url, headers=headers, data=payload, allow_redirects=True)
     m = re.search(r"gatewayId: \'(.*)\'", response.text)
-    gatewayID = m.group(1)
+    try:
+        gatewayID = m.group(1)
+    except:
+        print("didn't get the gatewayID from the current request, trying later")
+        return
     url = f"{base_url}R2/PlantHomeBsb/GetData/{gatewayID}"
     # get json data
     send_json = {"useCache": "true", "zone": "1", "filter": {"progIds": "null", "plant": "true", "zone": "true"}}
 
     response = session.post(url=url, json=send_json)
-    result_json = json.loads(response.text)
-
+    try:
+        result_json = json.loads(response.text)
+    except:
+        print("could not decode json")
+        return
     # extract the interesting data from the json
-    heatpump_data = result_json['data']
-    water_temp = heatpump_data['plantData']['dhwStorageTemp']
-    outside_temp = heatpump_data['plantData']['outsideTemp']
-    heatPump_str = 'off'
-    if heatpump_data['plantData']['heatPumpOn']:
-        heatPump_str = 'on'
-
+    try:
+        heatpump_data = result_json['data']
+        water_temp = heatpump_data['plantData']['dhwStorageTemp']
+        outside_temp = heatpump_data['plantData']['outsideTemp']
+        heatPump_str = 'off'
+        if heatpump_data['plantData']['heatPumpOn']:
+             heatPump_str = 'on'
+    except KeyError:
+        print("couldn't find a key, trying later on")
+        return
     now = datetime.datetime.now()
     ep = now.strftime('%Y-%m-%d %H:%M:%S')
     print("TS: "+ep+", WaterTemp: "+str(water_temp)+", OutsideTemp: "+str(outside_temp)+", HeatPumpState: "+heatPump_str)
